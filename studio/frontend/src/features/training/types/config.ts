@@ -13,6 +13,8 @@ import type {
 import type { BackendModelConfig } from "../api/models-api";
 
 export type LoraVariant = "lora" | "rslora" | "loftq" | "dora";
+/** Execution strategy for the selected physical GPU ids. */
+export type TrainingParallelismMode = "auto" | "single" | "model_parallel";
 
 export interface ModelCacheReferenceOptions {
   knownCached?: boolean;
@@ -69,6 +71,8 @@ export interface TrainingConfigState {
   projectName: string;
   trainingMethod: TrainingMethod;
   trainingMethodProvenance: TrainingMethodProvenance;
+  parallelismMode: TrainingParallelismMode;
+  selectedGpuIds: number[] | null;
   datasetSource: DatasetSource;
   browseDatasetSelection: BrowseDatasetSelection;
   datasetFormat: DatasetFormat;
@@ -194,6 +198,10 @@ export interface TrainingConfigActions {
     localPath: string | null,
   ) => void;
   setProjectName: (value: string) => void;
+  setGpuSelection: (
+    mode: TrainingParallelismMode,
+    gpuIds: number[] | null,
+  ) => void;
   ensureModelDefaultsLoaded: () => void;
   ensureDatasetChecked: () => void;
   setTrainingMethod: (method: TrainingMethod) => void;
