@@ -75,6 +75,8 @@ export const initialTrainingConfigState: TrainingConfigState = {
     loraVariantBeforeCpt: null,
     trainOnCompletionsBeforeCpt: null,
   },
+  parallelismMode: "auto",
+  selectedGpuIds: null,
   datasetSource: "huggingface",
   browseDatasetSelection: createHfBrowseDatasetSelection(null),
   datasetFormat: "auto",
