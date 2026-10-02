@@ -60,6 +60,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Callable, Union
 from datasets import Dataset
 from core.training.eval_dataset import evaluation_enabled
+from core.training.eval_loss import use_local_eval_loss
 from utils.datasets.audio_decode import ensure_audio_decoding
 from utils.datasets.cache_safe import load_dataset_cache_safe as load_dataset
 from utils.hf_dataset_options import hf_dataset_split_instruction_names
@@ -709,7 +710,9 @@ class UnslothTrainer:
         """Calculate total training steps from dataset size and training params."""
         if max_steps and max_steps > 0:
             return max_steps
-        len_dataloader = math.ceil(num_samples / batch_size)
+        # DistributedSampler pads to an equal number of samples per rank.
+        samples_per_rank = math.ceil(num_samples / world_size_from_env())
+        len_dataloader = math.ceil(samples_per_rank / batch_size)
         steps_per_epoch = max(
             len_dataloader // grad_accum + int(len_dataloader % grad_accum > 0), 1
         )
@@ -775,11 +778,15 @@ class UnslothTrainer:
         label = "",
     ):
         """Save model after training and update progress. Used by all training branches."""
+        # Keep Trainer's save calls on every rank (they own distributed save
+        # semantics), but only the writing rank may mutate auxiliary files.
+        should_save = getattr(getattr(self.trainer, "args", None), "should_save", True)
         if self.should_stop and self.save_on_stop:
             self.trainer._save_checkpoint(self.trainer.model, trial = None)
             self.trainer.save_model()
-            self.tokenizer.save_pretrained(output_dir)
-            self._patch_adapter_config(output_dir)
+            if should_save:
+                self.tokenizer.save_pretrained(output_dir)
+                self._patch_adapter_config(output_dir)
             msg = f"{label} training stopped" if label else "Training stopped"
             logger.info(f"\n{msg}. Model saved to {output_dir}\n")
             self._update_progress(
@@ -792,8 +799,9 @@ class UnslothTrainer:
             self._update_progress(is_training = False, status_message = "Training cancelled.")
         else:
             self.trainer.save_model()
-            self.tokenizer.save_pretrained(output_dir)
-            self._patch_adapter_config(output_dir)
+            if should_save:
+                self.tokenizer.save_pretrained(output_dir)
+                self._patch_adapter_config(output_dir)
             msg = f"{label} training completed" if label else "Training completed"
             logger.info(f"\n{msg}! Model saved to {output_dir}\n")
             self._update_progress(
@@ -4434,6 +4442,7 @@ class UnslothTrainer:
                 # Restore the full processor so checkpoints include preprocessor_config.json (GGUF export).
                 if sft_tokenizer is not self.tokenizer:
                     self.trainer.processing_class = self.tokenizer
+            use_local_eval_loss(self.trainer)
             logger.info("Trainer initialized\n")
 
             # Raw-text datasets always train on all tokens.
