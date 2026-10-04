@@ -13,7 +13,12 @@ def test_eval_mean_not_multiplied_by_world_size(world_size, previous):
     trainer = SimpleNamespace(args = SimpleNamespace(average_tokens_across_devices = previous))
     calls = []
 
-    def prediction_step(model, inputs, prediction_loss_only, ignore_keys = None):
+    def prediction_step(
+        model,
+        inputs,
+        prediction_loss_only,
+        ignore_keys = None,
+    ):
         calls.append((model, inputs, prediction_loss_only, ignore_keys))
         loss = 0.08
         if trainer.args.average_tokens_across_devices:
@@ -22,7 +27,11 @@ def test_eval_mean_not_multiplied_by_world_size(world_size, previous):
 
     trainer.prediction_step = prediction_step
     use_local_eval_loss(trainer)
-    assert trainer.prediction_step("model", {"labels": [1]}, True, ignore_keys = ["logits"]) == (0.08, None, None)
+    assert trainer.prediction_step("model", {"labels": [1]}, True, ignore_keys = ["logits"]) == (
+        0.08,
+        None,
+        None,
+    )
     assert calls == [("model", {"labels": [1]}, True, ["logits"])]
     assert trainer.args.average_tokens_across_devices is previous
 
